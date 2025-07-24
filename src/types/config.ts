@@ -22,8 +22,8 @@ export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
     baseURL: 'https://api.anthropic.com/v1'
   },
   gemini: {
-    provider: 'gemini',
+    provider: 'gemini', 
     model: 'gemini-1.5-pro',
-    baseURL: 'https://generativelanguage.googleapis.com/v1beta'
+    baseURL: 'https://generativelanguage.googleapis.com/v1'
   }
 };

@@ -17,10 +17,8 @@ function requireApiKey(provider: ModelProvider): void {
   }
 }
 
-// Test each provider 
-// NOTE: Currently only OpenAI is supported since ChatLoop uses OpenAI Responses API
-// TODO: Implement proper multi-provider support in ChatLoop
-const PROVIDERS_TO_TEST: ModelProvider[] = ['openai'];
+// Test each provider - all support OpenAI-compatible API
+const PROVIDERS_TO_TEST: ModelProvider[] = ['openai', 'anthropic', 'gemini'];
 
 describe('Multi-Provider Tool Calling Integration', () => {
   describe.each(PROVIDERS_TO_TEST)('%s provider', (provider) => {
