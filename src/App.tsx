@@ -130,7 +130,7 @@ const App: React.FC = () => {
         },
         onChunk: (text) => {
           // Handle streaming text if needed
-          console.log('Streaming:', text);
+          // Could be used for real-time display updates in future
         },
         onError: (error) => {
           console.error('Chat error:', error);
@@ -169,19 +169,45 @@ const App: React.FC = () => {
   // Handle approval requests
   const handleApprovalRequest = useCallback((request: ToolApprovalRequest): Promise<boolean> => {
     return new Promise((resolve) => {
+      console.log('Requesting approval for:', request.command);
       setPendingApproval(request);
       setMode('approval');
       
       // Store resolve function for later use
       (globalThis as any).resolveApproval = resolve;
+      
+      // Set up timeout for approval (60 seconds)
+      const timeoutId = setTimeout(() => {
+        console.log('Approval request timed out after 60 seconds');
+        if ((globalThis as any).resolveApproval === resolve) {
+          // Clean up
+          delete (globalThis as any).resolveApproval;
+          setPendingApproval(null);
+          setMode('chat');
+          
+          // Resolve with false (denial) on timeout
+          resolve(false);
+        }
+      }, 60000);
+      
+      // Store timeout ID for cleanup
+      (globalThis as any).approvalTimeoutId = timeoutId;
     });
   }, []);
 
   const handleApproval = useCallback((approved: boolean) => {
     if ((globalThis as any).resolveApproval) {
+      console.log('Approval resolved:', approved);
       (globalThis as any).resolveApproval(approved);
       delete (globalThis as any).resolveApproval;
     }
+    
+    // Clear timeout if it exists
+    if ((globalThis as any).approvalTimeoutId) {
+      clearTimeout((globalThis as any).approvalTimeoutId);
+      delete (globalThis as any).approvalTimeoutId;
+    }
+    
     setPendingApproval(null);
     setMode('chat');
   }, []);

@@ -66,7 +66,15 @@ export class ChatLoop implements ChatService {
       console.log('Input being sent:', JSON.stringify(input, null, 2));
       console.log('======================');
 
-      const stream = await this.oai.responses.create({
+      // Create a timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`API call timed out after ${this.oai.timeout}ms`));
+        }, this.oai.timeout || 120000);
+      });
+
+      // Create the API call promise
+      const apiPromise = this.oai.responses.create({
         model: MODEL_CONFIGS[this.provider].model,
         instructions,
         input,
@@ -77,6 +85,9 @@ export class ChatLoop implements ChatService {
         store: true,
         previous_response_id: this.lastResponseId,
       } satisfies ResponseCreateParams);
+
+      // Race between API call and timeout
+      const stream = await Promise.race([apiPromise, timeoutPromise]) as any;
 
       for await (const event of stream) {
         await this.handleStreamEvent(event, callbacks);
@@ -113,7 +124,13 @@ export class ChatLoop implements ChatService {
           console.log('================================');
 
           // Make another API call with only the function outputs when using previous_response_id
-          const followupStream = await this.oai.responses.create({
+          const followupTimeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => {
+              reject(new Error(`Follow-up API call timed out after ${this.oai.timeout}ms`));
+            }, this.oai.timeout || 120000);
+          });
+
+          const followupApiPromise = this.oai.responses.create({
             model: MODEL_CONFIGS[this.provider].model,
             instructions: "You are a helpful assistant that helps organize and sort folders. Continue the conversation with the tool results.",
             input: functionOutputs, // Only send the function outputs
@@ -124,6 +141,8 @@ export class ChatLoop implements ChatService {
             store: true,
             previous_response_id: this.lastResponseId,
           } satisfies ResponseCreateParams);
+
+          const followupStream = await Promise.race([followupApiPromise, followupTimeoutPromise]) as any;
 
           for await (const followupEvent of followupStream) {
             await this.handleStreamEvent(followupEvent, callbacks);

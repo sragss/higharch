@@ -37,8 +37,10 @@ export class ShellToolExecutor implements ToolExecutor {
     return this.executeShellCommand(command);
   }
 
-  private executeShellCommand(command: string): Promise<ToolExecutionResult> {
+  private executeShellCommand(command: string, timeoutMs: number = 30000): Promise<ToolExecutionResult> {
     return new Promise((resolve) => {
+      console.log(`Executing command with ${timeoutMs}ms timeout: ${command}`);
+      
       const child = spawn('bash', ['-c', command], {
         stdio: ['ignore', 'pipe', 'pipe'],
         cwd: process.cwd()
@@ -46,6 +48,29 @@ export class ShellToolExecutor implements ToolExecutor {
 
       let stdout = '';
       let stderr = '';
+      let isResolved = false;
+
+      // Set up timeout
+      const timeoutId = setTimeout(() => {
+        if (!isResolved) {
+          console.log(`Command timed out after ${timeoutMs}ms: ${command}`);
+          isResolved = true;
+          
+          // Kill the process
+          child.kill('SIGTERM');
+          setTimeout(() => {
+            if (!child.killed) {
+              child.kill('SIGKILL');
+            }
+          }, 5000);
+          
+          resolve({
+            success: false,
+            output: stdout,
+            error: `Command timed out after ${timeoutMs / 1000} seconds`
+          });
+        }
+      }, timeoutMs);
 
       child.stdout?.on('data', (data) => {
         stdout += data.toString();
@@ -56,26 +81,36 @@ export class ShellToolExecutor implements ToolExecutor {
       });
 
       child.on('close', (code) => {
-        if (code === 0) {
-          resolve({
-            success: true,
-            output: stdout || 'Command completed successfully'
-          });
-        } else {
-          resolve({
-            success: false,
-            output: stdout,
-            error: `Command failed (exit code ${code}): ${stderr}`
-          });
+        if (!isResolved) {
+          isResolved = true;
+          clearTimeout(timeoutId);
+          
+          if (code === 0) {
+            resolve({
+              success: true,
+              output: stdout || 'Command completed successfully'
+            });
+          } else {
+            resolve({
+              success: false,
+              output: stdout,
+              error: `Command failed (exit code ${code}): ${stderr}`
+            });
+          }
         }
       });
 
       child.on('error', (err) => {
-        resolve({
-          success: false,
-          output: '',
-          error: `Process error: ${err.message}`
-        });
+        if (!isResolved) {
+          isResolved = true;
+          clearTimeout(timeoutId);
+          
+          resolve({
+            success: false,
+            output: '',
+            error: `Process error: ${err.message}`
+          });
+        }
       });
     });
   }
