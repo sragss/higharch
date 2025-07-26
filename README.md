@@ -1,50 +1,50 @@
 # Higharch
 Higharch is an agentic CLI app which helps sort your folders.
 
-It can be started in any directory, starts by listing, then accepts user prompts and agentically works on them until the folders are properly sorted into a nice hierachy at the users request.
+It can be started in any directory, starts by listing, then accepts user prompts and agentically works on them until the folders are properly sorted into a nice hierarchy at the user's request.
 
 # Implementation details
-- We're going to use the OpenAI Typescript SDK to make chat / tool / function calls to the APIs. We'll support OPENAI_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY.
-- We'll use Ink to do pretty rendering of the CLI and the user commands.
+- Uses the OpenAI TypeScript SDK with the Responses API (`/v1/responses`) for native tool calling
+- Only supports OpenAI due to Responses API requirements
+- Uses Echo API (`https://echo.router.merit.systems`) for enhanced performance
+- Uses Ink for pretty rendering of the CLI and user commands
 
-## Multi-Provider Tool Calling Status
+# Setup
 
-**Current Implementation:**
-- ✅ **OpenAI**: Full support using OpenAI Responses API (`/v1/responses`) with native tool calling
-- ❌ **Anthropic**: Limited - OpenAI SDK compatibility layer only supports `/v1/messages` (chat completions), not `/v1/responses`
-- ❌ **Gemini**: Limited - OpenAI SDK compatibility layer only supports chat completions, not `/v1/responses`
+## Option 1: Global Installation (Recommended)
+1. Set your `ECHO_API_KEY` environment variable
+2. Run `npm run install:global` to install globally
+3. Run `higharch` from any directory to start the application
 
-**Provider Compatibility Research:**
+## Option 2: Local Development
+1. Set your `ECHO_API_KEY` environment variable
+2. Run `npm install` to install dependencies
+3. Run `npm start` to start the application
 
-**Anthropic OpenAI SDK Compatibility:**
-- ✅ Supports tool calling via `/v1/messages` endpoint  
-- ⚠️ `strict` parameter ignored (tool JSON not guaranteed to follow schema)
-- ⚠️ Intended for testing/comparison, not production use
-- ❌ No support for OpenAI Responses API endpoint
+## Uninstalling
+To uninstall the global version: `npm run uninstall:global`
 
-**Gemini OpenAI SDK Compatibility:**
-- ✅ Supports tool calling via chat completions (`/v1/chat/completions`)
-- ⚠️ Still in beta, some limitations with multiple functions
-- ⚠️ Some schema types not supported (like `anyOf`)
-- ❌ No support for OpenAI Responses API endpoint
+# Tools
+- **exec**: Executes mutating shell commands (mv, cp, etc.), requires user approval to run
+- **ls**: Executes list commands, does not require user approval, cannot look inside files
 
-**Options for Multi-Provider Support:**
+# Usage
+```bash
+# Navigate to any directory you want to organize
+cd ~/Downloads
 
-1. **Hybrid Approach**: Keep Responses API for OpenAI, implement chat completions for Anthropic/Gemini
-2. **Unified Approach**: Switch everything to chat completions API for consistency across providers  
-3. **Proxy Service**: Use LiteLLM or similar service to provide unified interface
+# Start higharch
+higharch
 
-**Current Status**: Only OpenAI provider fully functional with tool calling. Architecture ready for multi-provider expansion once approach is chosen.
+# Or if installed locally
+npm start
+```
 
-# User commaands
-*Anything prefixed with "/" runs a special command*
-- /model -- prompt to switch model: {OpenAI, Anthropic, Gemini}
-
-# Tools:
-exec: 
-- Executes mutating shell commands (mv, cp), requires user approval to run
-
-ls:
-- Executes a list command, does not require user approval to run, cannot look inside files
+# Features
+- ✅ Native tool calling with OpenAI Responses API
+- ✅ Conversation history and context maintenance
+- ✅ User approval for potentially destructive commands
+- ✅ Real-time directory listing updates
+- ✅ Clean, interactive CLI interface
 
 
