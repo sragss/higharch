@@ -1,6 +1,4 @@
-// Simple component tests - testing the props interfaces and basic functionality
-import { ChatMessage } from '../components/ChatHistory';
-import { ModelProvider } from '../types/config';
+import { ChatMessage, ToolApprovalRequest } from '../types';
 
 describe('Component Types', () => {
   test('ChatMessage has correct structure', () => {
@@ -17,16 +15,15 @@ describe('Component Types', () => {
     expect(message.timestamp).toBeInstanceOf(Date);
   });
 
-  test('ModelProvider type accepts valid providers', () => {
-    const validProviders: ModelProvider[] = ['openai', 'anthropic', 'gemini'];
-    
-    validProviders.forEach(provider => {
-      expect(['openai', 'anthropic', 'gemini']).toContain(provider);
-    });
-  });
+  test('ToolApprovalRequest has correct structure', () => {
+    const request: ToolApprovalRequest = {
+      toolName: 'exec',
+      command: 'rm -rf /tmp/test',
+      args: { command: 'rm -rf /tmp/test' }
+    };
 
-  test('Components module exists', () => {
-    // Simple test to ensure component types are correct
-    expect(true).toBe(true);
+    expect(request.toolName).toBe('exec');
+    expect(request.command).toBe('rm -rf /tmp/test');
+    expect(request.args).toBeDefined();
   });
 });

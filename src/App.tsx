@@ -6,21 +6,17 @@ import { render, Box, Text } from 'ink';
 import { 
   ChatHistory, 
   InputHandler, 
-  ModelSelector, 
   ApprovalPrompt,
   ChatMessage 
 } from './components';
-import { loadConfig, saveConfig } from './services/config';
 import { ShellToolExecutor } from './services/tools';
 import { ChatLoop } from './services/chat';
-import { Config, ModelProvider } from './types/config';
 import { ToolApprovalRequest } from './types/tools';
 
-type AppMode = 'chat' | 'model-select' | 'approval';
+type AppMode = 'chat' | 'approval';
 
 const App: React.FC = () => {
   // State
-  const [config, setConfig] = useState<Config>(loadConfig());
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentDir, setCurrentDir] = useState<string>(process.cwd());
   const [directoryListing, setDirectoryListing] = useState<string>('');
@@ -32,13 +28,10 @@ const App: React.FC = () => {
   const [chatService, setChatService] = useState<ChatLoop | null>(null);
   const [toolExecutor] = useState(new ShellToolExecutor());
 
-  // Available model providers
-  const modelOptions: ModelProvider[] = ['openai', 'anthropic', 'gemini'];
-
-  // Initialize chat service when config changes
+  // Initialize chat service
   useEffect(() => {
     try {
-      const service = new ChatLoop(config.currentModel);
+      const service = new ChatLoop();
       setChatService(service);
     } catch (error) {
       console.error('Failed to initialize chat service:', error);
@@ -49,7 +42,7 @@ const App: React.FC = () => {
         timestamp: new Date()
       }]);
     }
-  }, [config.currentModel]);
+  }, []);
 
   // Load initial directory listing
   useEffect(() => {
@@ -67,11 +60,6 @@ const App: React.FC = () => {
 
   // Handle user message submission
   const handleMessageSubmit = useCallback(async (userInput: string) => {
-    if (userInput.startsWith('/model')) {
-      setMode('model-select');
-      return;
-    }
-
     if (!chatService) {
       console.error('Chat service not initialized');
       return;
@@ -102,69 +90,53 @@ const App: React.FC = () => {
             });
             
             if (!approved) {
-              return 'Command cancelled by user';
+              return 'Command execution denied by user.';
             }
           }
           
           // Execute the tool
-          const result = await toolExecutor.execute(
-            toolCall.name, 
-            toolCall.args,
-            toolCall.name === 'exec' ? 
-              (req) => handleApprovalRequest(req) : 
-              undefined
-          );
+          const result = await toolExecutor.execute(toolCall.name, toolCall.args);
           
-          return result.success ? result.output : result.error || 'Tool execution failed';
+          // Reload directory listing if we're in the same directory
+          if (toolCall.name === 'exec' || toolCall.name === 'ls') {
+            await loadDirectoryListing();
+          }
+          
+          return result.output;
         },
         onComplete: (message) => {
-          if (message.trim()) {
-            const assistantMessage: ChatMessage = {
-              id: (Date.now() + 1).toString(),
-              role: 'assistant',
-              content: message,
-              timestamp: new Date()
-            };
-            setMessages(prev => [...prev, assistantMessage]);
-          }
-        },
-        onChunk: (text) => {
-          // Handle streaming text if needed
-          // Could be used for real-time display updates in future
+          const assistantMessage: ChatMessage = {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: message,
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, assistantMessage]);
         },
         onError: (error) => {
           console.error('Chat error:', error);
+          const errorMessage: ChatMessage = {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: `Error: ${error.message}`,
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, errorMessage]);
         }
       });
-    } catch (err) {
-      console.error('Chat error:', err);
+    } catch (error) {
+      console.error('Failed to process message:', error);
       const errorMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
+        id: Date.now().toString(),
         role: 'assistant',
-        content: `Error: ${err}`,
+        content: `Error: ${error}`,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsProcessing(false);
     }
-
-    setIsProcessing(false);
   }, [chatService]);
-
-  // Handle model selection
-  const handleModelSelect = useCallback((provider: ModelProvider) => {
-    const newConfig = { ...config, currentModel: provider };
-    setConfig(newConfig);
-    saveConfig(newConfig);
-    setMode('chat');
-    
-    const switchMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'assistant',
-      content: `Switched to ${provider}`,
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, switchMessage]);
-  }, [config]);
 
   // Handle approval requests
   const handleApprovalRequest = useCallback((request: ToolApprovalRequest): Promise<boolean> => {
@@ -223,22 +195,11 @@ const App: React.FC = () => {
     );
   }
 
-  if (mode === 'model-select') {
-    return (
-      <ModelSelector
-        currentModel={config.currentModel}
-        availableModels={modelOptions}
-        onSelect={handleModelSelect}
-        onCancel={() => setMode('chat')}
-      />
-    );
-  }
-
   return (
     <Box flexDirection="column" height="100%">
       {/* Directory header */}
       <Box flexDirection="column" marginBottom={1}>
-        <Text color="cyan">📁 {currentDir} ({config.currentModel})</Text>
+        <Text color="cyan">📁 {currentDir} (Echo API)</Text>
         <Text color="gray">{directoryListing}</Text>
       </Box>
       
@@ -248,14 +209,9 @@ const App: React.FC = () => {
       </Box>
 
       {/* Input handler */}
-      <InputHandler
-        onSubmit={handleMessageSubmit}
-        disabled={isProcessing}
-        placeholder={isProcessing ? "Processing..." : "Type your message..."}
-      />
+      <InputHandler onSubmit={handleMessageSubmit} disabled={isProcessing} />
     </Box>
   );
 };
 
-// Start the app
 render(<App />);

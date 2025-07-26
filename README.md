@@ -1,5 +1,5 @@
-# Hierch
-Hierch is an agentic CLI app which helps sort your folders.
+# Higharch
+Higharch is an agentic CLI app which helps sort your folders.
 
 It can be started in any directory, starts by listing, then accepts user prompts and agentically works on them until the folders are properly sorted into a nice hierachy at the users request.
 

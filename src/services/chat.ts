@@ -7,35 +7,24 @@ import type {
   Response as OpenAIResponse
 } from "openai/resources/responses/responses";
 import { ChatService, StreamingChatCallback, ToolCall } from '../types/chat';
-import { ModelProvider, MODEL_CONFIGS } from '../types/config';
+import { MODEL_CONFIG } from '../types/config';
 import { ALL_TOOLS } from '../types/tools';
 
 export class ChatLoop implements ChatService {
   private oai: OpenAI;
   private conversationHistory: ResponseInputItem[] = [];
   private lastResponseId?: string;
-  private provider: ModelProvider;
 
-  constructor(provider: ModelProvider) {
-    this.provider = provider;
-    const config = MODEL_CONFIGS[provider];
-    
-    // Get API key based on provider
-    const apiKeyMap = {
-      openai: process.env.OPENAI_API_KEY,
-      anthropic: process.env.ANTHROPIC_API_KEY,
-      gemini: process.env.GEMINI_API_KEY
-    };
-
-    const apiKey = apiKeyMap[provider];
-    if (!apiKey) {
-      throw new Error(`${provider} API key not set`);
+  constructor() {
+    // Check if ECHO_API_KEY is set
+    if (!process.env.ECHO_API_KEY) {
+      throw new Error('ECHO_API_KEY environment variable is not set');
     }
 
-    // Create OpenAI client with provider-specific baseURL
+    // Create OpenAI client with Echo API configuration
     this.oai = new OpenAI({
-      apiKey,
-      baseURL: config.baseURL,
+      apiKey: process.env.ECHO_API_KEY,
+      baseURL: MODEL_CONFIG.baseURL,
       timeout: 120000
     });
   }
@@ -73,12 +62,12 @@ export class ChatLoop implements ChatService {
         }, this.oai.timeout || 120000);
       });
 
-      // Create the API call promise
+      // Create the API call promise - use non-streaming since Echo API doesn't support streaming
       const apiPromise = this.oai.responses.create({
-        model: MODEL_CONFIGS[this.provider].model,
+        model: MODEL_CONFIG.model,
         instructions,
         input,
-        stream: true,
+        stream: false,
         parallel_tool_calls: false,
         tools: ALL_TOOLS,
         tool_choice: "auto",
@@ -87,14 +76,13 @@ export class ChatLoop implements ChatService {
       } satisfies ResponseCreateParams);
 
       // Race between API call and timeout
-      const stream = await Promise.race([apiPromise, timeoutPromise]) as any;
+      const response = await Promise.race([apiPromise, timeoutPromise]) as any;
 
-      for await (const event of stream) {
-        await this.handleStreamEvent(event, callbacks);
-      }
+      // Handle non-streaming response
+      await this.handleNonStreamingResponse(response, callbacks);
 
     } catch (error) {
-      console.error(`${this.provider} API call failed:`, error);
+      console.error('Echo API call failed:', error);
       if (callbacks?.onError) {
         callbacks.onError(error as Error);
       }
@@ -102,76 +90,61 @@ export class ChatLoop implements ChatService {
     }
   }
 
-  private async handleStreamEvent(
-    event: ResponseStreamEvent, 
+  private async handleNonStreamingResponse(
+    response: OpenAIResponse,
     callbacks?: StreamingChatCallback
   ): Promise<void> {
+    this.lastResponseId = response.id;
     
-    // Handle response completion
-    if (event.type === 'response.completed') {
-      const completedEvent = event as ResponseCompletedEvent;
-      this.lastResponseId = completedEvent.response.id;
+    // Process function calls if they exist
+    if (callbacks?.onToolCall) {
+      const functionOutputs = await this.processFunctionCalls(response, callbacks.onToolCall);
       
-      // Process function calls if they exist
-      if (callbacks?.onToolCall) {
-        const functionOutputs = await this.processFunctionCalls(completedEvent.response, callbacks.onToolCall);
-        
-        // If we had tool calls, we need to continue the conversation with tool results
-        if (functionOutputs.length > 0) {
-          console.log('=== Follow-up API Call Debug ===');
-          console.log('Previous response ID:', this.lastResponseId);
-          console.log('Function outputs to send:', JSON.stringify(functionOutputs, null, 2));
-          console.log('================================');
+      // If we had tool calls, we need to continue the conversation with tool results
+      if (functionOutputs.length > 0) {
+        console.log('=== Follow-up API Call Debug ===');
+        console.log('Previous response ID:', this.lastResponseId);
+        console.log('Function outputs to send:', JSON.stringify(functionOutputs, null, 2));
+        console.log('================================');
 
-          // Make another API call with only the function outputs when using previous_response_id
-          const followupTimeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => {
-              reject(new Error(`Follow-up API call timed out after ${this.oai.timeout}ms`));
-            }, this.oai.timeout || 120000);
-          });
+        // Make another API call with only the function outputs when using previous_response_id
+        const followupTimeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error(`Follow-up API call timed out after ${this.oai.timeout}ms`));
+          }, this.oai.timeout || 120000);
+        });
 
-          const followupApiPromise = this.oai.responses.create({
-            model: MODEL_CONFIGS[this.provider].model,
-            instructions: "You are a helpful assistant that helps organize and sort folders. Continue the conversation with the tool results.",
-            input: functionOutputs, // Only send the function outputs
-            stream: true,
-            parallel_tool_calls: false,
-            tools: ALL_TOOLS,
-            tool_choice: "auto",
-            store: true,
-            previous_response_id: this.lastResponseId,
-          } satisfies ResponseCreateParams);
+        const followupApiPromise = this.oai.responses.create({
+          model: MODEL_CONFIG.model,
+          instructions: "You are a helpful assistant that helps organize and sort folders. Continue the conversation with the tool results.",
+          input: functionOutputs, // Only send the function outputs
+          stream: false, // Use non-streaming for follow-up calls too
+          parallel_tool_calls: false,
+          tools: ALL_TOOLS,
+          tool_choice: "auto",
+          store: true,
+          previous_response_id: this.lastResponseId,
+        } satisfies ResponseCreateParams);
 
-          const followupStream = await Promise.race([followupApiPromise, followupTimeoutPromise]) as any;
-
-          for await (const followupEvent of followupStream) {
-            await this.handleStreamEvent(followupEvent, callbacks);
-          }
-          return;
-        }
-      }
-      
-      // Extract text content for callback
-      for (const item of completedEvent.response.output) {
-        if (item.type === 'message') {
-          // Extract text content for callback
-          if (callbacks?.onComplete && item.content) {
-            const textContent = item.content
-              .filter((c: any) => c.type === 'output_text')
-              .map((c: any) => c.text)
-              .join('');
-            if (textContent) {
-              callbacks.onComplete(textContent);
-            }
-          }
-        }
+        const followupResponse = await Promise.race([followupApiPromise, followupTimeoutPromise]) as any;
+        await this.handleNonStreamingResponse(followupResponse, callbacks);
+        return;
       }
     }
     
-    // Handle text streaming
-    else if (event.type === 'response.output_text.delta') {
-      if (callbacks?.onChunk) {
-        callbacks.onChunk((event as any).delta);
+    // Extract text content for callback
+    for (const item of response.output) {
+      if (item.type === 'message') {
+        // Extract text content for callback
+        if (callbacks?.onComplete && item.content) {
+          const textContent = item.content
+            .filter((c: any) => c.type === 'output_text')
+            .map((c: any) => c.text)
+            .join('');
+          if (textContent) {
+            callbacks.onComplete(textContent);
+          }
+        }
       }
     }
   }

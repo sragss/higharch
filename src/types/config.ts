@@ -1,29 +1,14 @@
-export type ModelProvider = 'openai' | 'anthropic' | 'gemini';
-
 export interface Config {
-  currentModel: ModelProvider;
+  // No longer need currentModel since we only support OpenAI/Echo
 }
 
 export interface ModelConfig {
-  provider: ModelProvider;
   model: string;
-  baseURL?: string;
-  headers?: Record<string, string>;
+  baseURL: string;
 }
 
-export const MODEL_CONFIGS: Record<ModelProvider, ModelConfig> = {
-  openai: {
-    provider: 'openai',
-    model: 'gpt-4o'
-  },
-  anthropic: {
-    provider: 'anthropic',
-    model: 'claude-3-5-sonnet-20241022',
-    baseURL: 'https://api.anthropic.com/v1'
-  },
-  gemini: {
-    provider: 'gemini', 
-    model: 'gemini-1.5-pro',
-    baseURL: 'https://generativelanguage.googleapis.com/v1'
-  }
+// Simplified config - only OpenAI/Echo API
+export const MODEL_CONFIG: ModelConfig = {
+  model: 'gpt-4o',
+  baseURL: 'https://echo.router.merit.systems'
 };
