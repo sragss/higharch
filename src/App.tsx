@@ -30,18 +30,23 @@ const App: React.FC = () => {
 
   // Initialize chat service
   useEffect(() => {
-    try {
-      const service = new ChatLoop();
-      setChatService(service);
-    } catch (error) {
-      console.error('Failed to initialize chat service:', error);
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `Error: ${error}`,
-        timestamp: new Date()
-      }]);
-    }
+    const initializeService = async () => {
+      try {
+        const service = new ChatLoop();
+        await service.initialize();
+        setChatService(service);
+      } catch (error) {
+        console.error('Failed to initialize chat service:', error);
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `Error: ${error}`,
+          timestamp: new Date()
+        }]);
+      }
+    };
+
+    initializeService();
   }, []);
 
   // Load initial directory listing

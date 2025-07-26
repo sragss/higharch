@@ -12,14 +12,23 @@ It can be started in any directory, starts by listing, then accepts user prompts
 # Setup
 
 ## Option 1: Global Installation (Recommended)
-1. Set your `ECHO_API_KEY` environment variable
-2. Run `npm run install:global` to install globally
-3. Run `higharch` from any directory to start the application
+1. Run `npm run install:global` to install globally
+2. Run `higharch` from any directory to start the application
+3. Follow the authentication flow to get your API key
 
 ## Option 2: Local Development
-1. Set your `ECHO_API_KEY` environment variable
-2. Run `npm install` to install dependencies
-3. Run `npm start` to start the application
+1. Run `npm install` to install dependencies
+2. Run `npm start` to start the application
+3. Follow the authentication flow to get your API key
+
+## Authentication
+On first run, higharch will:
+1. Open your browser to the Echo API authentication page
+2. Guide you through generating an API key
+3. Store the key securely in `~/.higharch/config.json`
+4. Remember your key for future use
+
+You can also set `ECHO_API_KEY` environment variable to skip the authentication flow.
 
 ## Uninstalling
 To uninstall the global version: `npm run uninstall:global`

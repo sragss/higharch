@@ -10,13 +10,13 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Path to the main App.tsx file
-const appPath = join(__dirname, '..', 'src', 'App.tsx');
+// Path to the CLI file
+const cliPath = join(__dirname, '..', 'src', 'cli.ts');
 
 // Check if tsx is available
 try {
-  // Try to run the app with tsx
-  const child = spawn('npx', ['tsx', appPath], {
+  // Try to run the CLI with tsx
+  const child = spawn('npx', ['tsx', cliPath], {
     stdio: 'inherit',
     cwd: process.cwd()
   });

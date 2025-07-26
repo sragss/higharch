@@ -9,21 +9,25 @@ import type {
 import { ChatService, StreamingChatCallback, ToolCall } from '../types/chat';
 import { MODEL_CONFIG } from '../types/config';
 import { ALL_TOOLS } from '../types/tools';
+import { ConfigService } from './config';
 
 export class ChatLoop implements ChatService {
-  private oai: OpenAI;
+  private oai!: OpenAI; // Using definite assignment assertion
   private conversationHistory: ResponseInputItem[] = [];
   private lastResponseId?: string;
+  private configService: ConfigService;
 
   constructor() {
-    // Check if ECHO_API_KEY is set
-    if (!process.env.ECHO_API_KEY) {
-      throw new Error('ECHO_API_KEY environment variable is not set');
-    }
+    this.configService = new ConfigService();
+  }
+
+  async initialize(): Promise<void> {
+    // Get API key from config service (authentication already handled at CLI level)
+    const apiKey = await this.configService.getApiKey();
 
     // Create OpenAI client with Echo API configuration
     this.oai = new OpenAI({
-      apiKey: process.env.ECHO_API_KEY,
+      apiKey,
       baseURL: MODEL_CONFIG.baseURL,
       timeout: 120000
     });
@@ -39,6 +43,11 @@ export class ChatLoop implements ChatService {
   }
 
   async chat(userInput: string, callbacks?: StreamingChatCallback): Promise<void> {
+    // Ensure initialization
+    if (!this.oai) {
+      await this.initialize();
+    }
+
     this.addUserMessage(userInput);
 
     const instructions = "You are a helpful assistant that helps organize and sort folders. You can execute shell commands using the provided tools. Use the 'ls' tool to list directory contents and the 'exec' tool for file operations like moving, copying, and organizing files.";
