@@ -219,4 +219,16 @@ const App: React.FC = () => {
   );
 };
 
-render(<App />);
+// Handle cleanup when the app exits
+const { unmount } = render(<App />);
+
+// Setup cleanup handlers
+const cleanup = () => {
+  console.log('\n👋 Goodbye!');
+  unmount();
+  process.exit(0);
+};
+
+process.on('SIGINT', cleanup);   // Ctrl+C
+process.on('SIGTERM', cleanup);  // Termination signal
+process.on('SIGQUIT', cleanup);  // Quit signal
